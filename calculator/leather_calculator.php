@@ -293,7 +293,7 @@ require_once __DIR__ . '/../config.php'; // Sube un nivel para encontrar config.
          </div>
      </footer>
 
-    <script src="./frontend/js/script.js"></script>
+    <script src="./frontend/js/script.js" defer></script>
 
     <?php
      // Si tu calculadora usaba jQuery o cualquier otra librer\u00eda, incl\u00fayela aqu\u00ed si es necesario

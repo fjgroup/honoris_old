@@ -98,81 +98,195 @@ document.addEventListener('DOMContentLoaded', () => {
          console.log(`Generated ${newCount} ingredient input blocks, preserving existing data where possible.`); // Para depuracion
     }
 
-    // --- Funciones de Recopilacion de Datos ---
+    // --- Funciones de Recopilacion y Parseo de Datos ---
     /**
-     * Recopila los valores actuales de los inputs del formulario.
-     * @returns {object} Un objeto con los valores de los inputs del formulario.
+     * Recopila y parsea los valores actuales de los inputs del formulario.
+     * @returns {object} Un objeto con los valores parseados del formulario.
      */
-    function collectFormData() {
-        const formData = {};
+    function collectAndParseCraftingFormData() {
+        const parsedData = {};
+        const getFloat = (el, defaultValue = 0) => el ? parseFloat(el.value) || defaultValue : defaultValue;
+        const getInt = (el, defaultValue = 0) => el ? parseInt(el.value, 10) || defaultValue : defaultValue;
+        const getString = (el, defaultValue = '') => el ? el.value.trim() : defaultValue;
 
-        // Seccion 1 - Costos y Tasas Generales (Asegurate que los IDs en HTML coincidan)
-        formData['rental_cost_value'] = DOM.rentalCostValueInput?.value ?? '0'; // Cambiado de rental_cost_percentage
-        formData['purchase_percentage'] = DOM.purchasePercentageSelect?.value ?? '2.5';
-        formData['sales_percentage'] = DOM.salesPercentageSelect?.value ?? '4';
-        formData['publication_percentage'] = '2.5'; // Tasa fija
-        formData['return_percentage'] = DOM.returnPercentageSelect?.value ?? '36.7';
+        // Seccion 1 - Costos y Tasas Generales
+        parsedData.rental_cost_value = getFloat(DOM.rentalCostValueInput);
+        parsedData.purchase_percentage = getFloat(DOM.purchasePercentageSelect, 2.5);
+        parsedData.sales_percentage = getFloat(DOM.salesPercentageSelect, 4);
+        // parsedData.publication_percentage = 2.5; // Tasa fija, no se recoge del form
+        parsedData.return_percentage = getFloat(DOM.returnPercentageSelect, 36.7);
 
-        // Seccion 2 - Definicion del Producto (Asegurate que los IDs en HTML coincidan)
-        formData['product_name'] = DOM.productNameInput?.value ?? '';
-        formData['object_power'] = DOM.objectPowerInput?.value ?? '0';
-        formData['ingredient_count'] = DOM.ingredientCountSelect?.value ?? '1';
-        formData['crafted_units'] = DOM.craftedUnitsInput?.value ?? '1';
+        // Seccion 2 - Definicion del Producto
+        parsedData.product_name = getString(DOM.productNameInput);
+        parsedData.object_power = getInt(DOM.objectPowerInput);
+        parsedData.ingredient_count = getInt(DOM.ingredientCountSelect, 1);
+        parsedData.crafted_units = getInt(DOM.craftedUnitsInput, 1);
 
-        // Sumar costos hundidos activos para enviar al backend
+        parsedData.ingredients = [];
+        if (DOM.ingredientInputsDiv) {
+            DOM.ingredientInputsDiv.querySelectorAll('.ingredient-input-item').forEach(itemDiv => {
+                const nameEl = itemDiv.querySelector('input[type="text"]');
+                const quantityEl = itemDiv.querySelector('input[type="number"]');
+                if (nameEl && quantityEl) {
+                    parsedData.ingredients.push({
+                        name: getString(nameEl),
+                        quantity: getInt(quantityEl, 1)
+                    });
+                }
+            });
+        }
+
+        // Seccion 3 - Precios
+        parsedData.ingredient_prices = [];
+        if (DOM.ingredientPriceInputsDiv) {
+            DOM.ingredientPriceInputsDiv.querySelectorAll('.ingredient-price-item').forEach(itemDiv => {
+                const priceEl = itemDiv.querySelector('input[type="number"]');
+                const nameHiddenEl = itemDiv.querySelector('input[type="hidden"]');
+                if (priceEl && nameHiddenEl) {
+                    parsedData.ingredient_prices.push({
+                        name: getString(nameHiddenEl),
+                        price: getFloat(priceEl)
+                    });
+                }
+            });
+        }
+        parsedData.product_selling_price = getFloat(DOM.productSellingPriceInput);
+        parsedData.fabrication_cycles = getInt(DOM.fabricationCyclesInput, 1);
+
+        // Costos hundidos (ya se parsean a n\u00famero en su l\u00f3gica de guardado/carga)
         let totalSunkCostsToApply = 0;
         const loadedProductId = DOM.craftingCalculatorForm.dataset.loadedId;
         if (loadedProductId) {
-            const history = getProductHistory();
+            const history = getProductHistory(); // Asume que getProductHistory devuelve objetos con sunk_publication_costs_array ya como n\u00fameros
             const currentProduct = history.find(p => p.id === loadedProductId);
             if (currentProduct && currentProduct.data?.sunk_publication_costs_array) {
                 totalSunkCostsToApply = currentProduct.data.sunk_publication_costs_array.reduce((sum, cost) => sum + cost, 0);
             }
         }
-        formData['total_sunk_publication_cost_to_deduct'] = totalSunkCostsToApply;
+        parsedData.total_sunk_publication_cost_to_deduct = totalSunkCostsToApply;
 
-        // Ingredientes Dinamicos (Nombres y Cantidades)
-        formData['ingredients'] = [];
-        if (DOM.ingredientInputsDiv) {
-            DOM.ingredientInputsDiv.querySelectorAll('.ingredient-input-item').forEach(ingredientItemDiv => {
-                 const nameInput = ingredientItemDiv.querySelector('input[type="text"]');
-                 const quantityInput = ingredientItemDiv.querySelector('input[type="number"]');
-                 if (nameInput && quantityInput) {
-                     formData['ingredients'].push({
-                         name: nameInput.value,
-                         quantity: quantityInput.value
-                     });
-                 }
+        console.log("Collected and Parsed Crafting Form Data:", parsedData);
+        return parsedData;
+    }
+
+
+    // --- Funciones de Validaci\u00f3n ---
+    function validateCraftingFormInput(data) {
+        const errors = [];
+        if (!data.product_name) errors.push("El nombre del producto no puede estar vac\u00edo.");
+        if (data.object_power <= 0) errors.push("El poder del objeto debe ser mayor a 0.");
+        if (data.crafted_units < 1) errors.push("La cantidad a fabricar debe ser al menos 1.");
+        if (data.fabrication_cycles < 1) errors.push("Los lotes de fabricaci\u00f3n deben ser al menos 1.");
+
+        if (!data.ingredients || data.ingredients.length === 0) {
+            errors.push("Debe definir al menos un ingrediente.");
+        } else {
+            data.ingredients.forEach((ing, index) => {
+                if (!ing.name) errors.push(`El nombre del ingrediente ${index + 1} no puede estar vac\u00edo.`);
+                if (ing.quantity <= 0) errors.push(`La cantidad del ingrediente ${ing.name || index + 1} debe ser mayor a 0.`);
             });
         }
 
-        // Seccion 3 - Precios (Solo si la seccion esta visible)
-        formData['ingredient_prices'] = [];
-        formData['fabrication_cycles'] = DOM.fabricationCyclesInput?.value ?? '1'; // Nuevo campo
-         if (DOM.ingredientPriceInputsDiv) {
-             DOM.ingredientPriceInputsDiv.querySelectorAll('.ingredient-price-item').forEach(div => { // Asumiendo que tambien quieres ser especifico aqui
-                  const priceInput = div.querySelector('input[type="number"]');
-                  const nameInputHidden = div.querySelector('input[type="hidden"]'); // Obtener el nombre del ingrediente asociado
-                  if (priceInput && nameInputHidden) {
-                       formData['ingredient_prices'].push({
-                          name: nameInputHidden.value,
-                          price: priceInput.value
-                       });
-                  }
-             });
-         } else {
-              console.warn("Element 'ingredientPriceInputsDiv' not found in DOM object or page.");
-         }
+        // Validar precios solo si la secci\u00f3n de precios est\u00e1 visible (implica que se carg\u00f3 un producto o se est\u00e1n definiendo)
+        if (DOM.pricingSectionDiv && DOM.pricingSectionDiv.style.display !== 'none') {
+            if (data.product_selling_price < 0) errors.push("El precio de venta del producto no puede ser negativo.");
+            if (!data.ingredient_prices || data.ingredient_prices.length !== data.ingredients.length) {
+                 // Esto puede pasar si se a\u00f1aden/quitan ingredientes despu\u00e9s de cargar precios.
+                 // Se podr\u00eda mejorar la l\u00f3gica de generatePricingInputs para manejar esto.
+                 // Por ahora, un error gen\u00e9rico.
+                errors.push("El n\u00famero de precios de ingredientes no coincide con los ingredientes definidos. Carga o define los precios nuevamente.");
+            } else {
+                data.ingredient_prices.forEach((ip, index) => {
+                    const ingName = data.ingredients[index]?.name || `Ingrediente ${index+1}`;
+                    if (ip.price < 0) errors.push(`El precio del ingrediente "${ip.name || ingName}" no puede ser negativo.`);
+                });
+            }
+        }
 
-        // Precio de Venta del Producto (Asegurate que el ID en HTML coincida)
-        formData['product_selling_price'] = DOM.productSellingPriceInput?.value ?? '0';
-        
-        console.log("Collected form data:", formData); // Para depuracion
+        // Validaciones para tasas generales
+        if (data.rental_cost_value < 0) errors.push("El costo de alquiler no puede ser negativo.");
+        if (data.purchase_percentage < 0) errors.push("La tasa de compra no puede ser negativa.");
+        if (data.sales_percentage < 0) errors.push("La tasa de venta no puede ser negativa.");
+        if (data.return_percentage <= 0) errors.push("La tasa de retorno debe ser mayor a 0.");
 
-        return formData;
+        return errors;
     }
 
-    // --- Funciones de Visualizacion de Resultados y Errores ---
+    // --- Funciones de C\u00e1lculo ---
+    function performCraftingCalculations(data) {
+        const results = { summary: {}, per_unit: {} };
+        // Los errores de validaci\u00f3n de datos ya se hicieron. Aqu\u00ed podr\u00edan ir errores de l\u00f3gica si aplican.
+
+        const rental_cost_value = data.rental_cost_value;
+        const purchase_percentage = data.purchase_percentage;
+        const sales_percentage = data.sales_percentage;
+        const return_percentage = data.return_percentage;
+        const object_power = data.object_power;
+        const crafted_units = data.crafted_units;
+        const ingredients = data.ingredients;
+        const ingredient_prices = data.ingredient_prices;
+        const product_selling_price = data.product_selling_price;
+        const fabrication_cycles = data.fabrication_cycles;
+        const total_sunk_publication_cost_to_deduct = data.total_sunk_publication_cost_to_deduct;
+        const fixed_publication_percentage = 2.5;
+
+        let total_ingredient_cost_before_purchase_tax = 0;
+        const ingredientPricesMap = {};
+        ingredient_prices.forEach(p => { ingredientPricesMap[p.name] = p.price; });
+
+        ingredients.forEach(ingredient => {
+            const ingredient_name = ingredient.name;
+            const required_quantity_for_one_cycle = ingredient.quantity * crafted_units; // Cantidad total del ingrediente para TODAS las 'crafted_units' en UN ciclo
+            const ingredient_price_per_unit = ingredientPricesMap[ingredient_name] || 0;
+
+            const effective_purchase_rate = (100 - return_percentage) / 100;
+            // Cantidad de este ingrediente que realmente necesitas comprar para UN ciclo, despu\u00e9s del retorno
+            const actual_quantity_to_buy_for_one_cycle = required_quantity_for_one_cycle * effective_purchase_rate;
+            const cost_of_this_ingredient_for_one_cycle = actual_quantity_to_buy_for_one_cycle * ingredient_price_per_unit;
+            total_ingredient_cost_before_purchase_tax += cost_of_this_ingredient_for_one_cycle;
+        });
+
+        const total_ingredient_cost_with_purchase_tax_one_cycle = total_ingredient_cost_before_purchase_tax * (1 + (purchase_percentage / 100));
+        const single_cycle_rental_cost = (rental_cost_value / 100) * (crafted_units * object_power) * 0.1125;
+        const single_cycle_crafting_cost = total_ingredient_cost_with_purchase_tax_one_cycle + single_cycle_rental_cost;
+        const single_cycle_sales_revenue_gross = product_selling_price * crafted_units;
+        const single_cycle_sales_deduction = single_cycle_sales_revenue_gross * (sales_percentage / 100);
+        const single_cycle_current_publication_deduction = single_cycle_sales_revenue_gross * (fixed_publication_percentage / 100);
+        const single_cycle_net_sales_revenue = single_cycle_sales_revenue_gross - single_cycle_sales_deduction - single_cycle_current_publication_deduction;
+        const single_cycle_net_profit_loss = single_cycle_net_sales_revenue - single_cycle_crafting_cost;
+
+        results.per_unit.ingredient_cost = crafted_units > 0 ? total_ingredient_cost_with_purchase_tax_one_cycle / crafted_units : 0;
+        results.per_unit.rental_cost = crafted_units > 0 ? single_cycle_rental_cost / crafted_units : 0;
+        results.per_unit.total_crafting_cost = crafted_units > 0 ? single_cycle_crafting_cost / crafted_units : 0;
+        results.per_unit.selling_price = product_selling_price;
+        results.per_unit.net_selling_price = crafted_units > 0 ? single_cycle_net_sales_revenue / crafted_units : 0;
+        results.per_unit.net_profit_loss = crafted_units > 0 ? single_cycle_net_profit_loss / crafted_units : 0;
+        results.per_unit.net_profit_loss_percentage = results.per_unit.total_crafting_cost > 0 ? (results.per_unit.net_profit_loss / results.per_unit.total_crafting_cost) * 100 : (results.per_unit.net_profit_loss >= 0 ? 0 : -Infinity);
+
+        results.summary.total_ingredient_cost = total_ingredient_cost_with_purchase_tax_one_cycle * fabrication_cycles;
+        results.summary.total_rental_cost = single_cycle_rental_cost * fabrication_cycles;
+        results.summary.total_crafting_cost = single_cycle_crafting_cost * fabrication_cycles;
+        
+        const summary_total_sales_revenue_gross = single_cycle_sales_revenue_gross * fabrication_cycles;
+        results.summary.total_sales_revenue_gross = summary_total_sales_revenue_gross; // Guardar bruto para referencia si es necesario
+
+        const summary_sales_deduction = summary_total_sales_revenue_gross * (sales_percentage / 100);
+        const summary_current_publication_cost = single_cycle_current_publication_deduction * fabrication_cycles;
+
+        results.summary.current_total_publication_cost = summary_current_publication_cost;
+        results.summary.total_sunk_publication_cost_applied = total_sunk_publication_cost_to_deduct;
+
+        results.summary.total_net_sales_revenue = summary_total_sales_revenue_gross - summary_sales_deduction - summary_current_publication_cost - total_sunk_publication_cost_to_deduct;
+        const summary_net_profit_loss = results.summary.total_net_sales_revenue - results.summary.total_crafting_cost;
+        // results.summary.net_profit_loss = summary_net_profit_loss; // No se muestra directamente este total, sino el %
+
+        results.summary.net_profit_loss_percentage = results.summary.total_crafting_cost > 0 ? (summary_net_profit_loss / results.summary.total_crafting_cost) * 100 : (summary_net_profit_loss >=0 ? 0 : -Infinity);
+
+        return { success: true, results: results, errors: [] };
+    }
+
+
+    // --- Funciones de Visualizaci\u00f3n de Resultados y Errores ---
 
     /**
      * Muestra los errores de validacion en la interfaz.
@@ -271,64 +385,36 @@ document.addEventListener('DOMContentLoaded', () => {
      * Maneja el envio del formulario de calculo.
      * @param {Event} event - El objeto evento del submit.
      */
-    async function handleSubmitForm(event) {
-        if (DOM.craftingCalculatorForm) { // Verificacion adicional
-            // Guardar referencia al formulario para usarla en saveProductPricesAndResults
-            DOM.craftingCalculatorForm.dataset.lastResults = null; // Limpiar resultados anteriores
-             console.log("Form submit event detected!"); // Para depuracion
+    function handleSubmitForm(event) { // No necesita ser async
+        event.preventDefault();
+        console.log("Submit event for Crafting Calculator (JS logic).");
 
-             event.preventDefault(); // Prevenir el envio tradicional del formulario
+        if (!DOM.craftingCalculatorForm) {
+            console.error("Error: Element 'craftingCalculatorForm' not found for submit listener.");
+            return;
+        }
 
-             // Limpiar resultados anteriores y errores
-             displayErrors([]); // Limpiar errores visualmente
-             displayResults(null); // Limpiar resultados visualmente
-            
-             // Recopilar datos del formulario (usando la funcion collectFormData que acabamos de añadir)
-             const formData = collectFormData();
+        // Limpiar UI
+        displayErrors([]);
+        displayResults(null); // Limpia la secci\u00f3n de resultados
+        DOM.craftingCalculatorForm.dataset.lastResults = null;
 
-             // La validacion principal se hace en el backend, pero se podrian añadir validaciones basicas aqui.
-             console.log("Datos del formulario a enviar para calcular:", formData); // Para depuracion
+        const parsedData = collectAndParseCraftingFormData();
+        const validationErrors = validateCraftingFormInput(parsedData);
 
+        if (validationErrors.length > 0) {
+            displayErrors(validationErrors);
+            return;
+        }
 
-             try {
-                 const response = await fetch('backend/calculate_crafting.php', {
-                     method: 'POST',
-                     headers: {
-                          'Content-Type': 'application/json'
-                     },
-                     body: JSON.stringify(formData),
-                 });
+        const calculationResult = performCraftingCalculations(parsedData);
 
-                  const contentType = response.headers.get("content-type");
-                  if (!contentType || !contentType.includes("application/json")) {
-                      const text = await response.text();
-                      console.error('Respuesta no es JSON:', text);
-                       displayErrors(['Error en la respuesta del servidor. Formato inesperado o error en backend.']);
-                      // Mostrar la respuesta de texto en la consola para depurar el error del backend
-                      console.error('Texto de respuesta del servidor:', text);
-                      return;
-                  }
-
-                 const result = await response.json();
-                  console.log("Resultado del backend:", result);
-
-                 if (result.success) {
-                     displayResults(result.results);
-                     DOM.craftingCalculatorForm.dataset.lastResults = JSON.stringify(result.results); // Guardar resultados para el boton de guardar precios
-                     displayErrors([]); // Asegurarse de limpiar errores si fue exitoso
-
-                 } else {
-                    // Si success es false, esperamos un array de errores
-                     displayErrors(result.errors || [result.error || 'Ocurrio un error desconocido en el calculo.']);
-                     displayResults(null); // Limpiar resultados si hubo error
-                 }
-             } catch (error) {
-                 console.error('Error al realizar el calculo o procesar la respuesta:', error);
-                 displayErrors(['Ocurrio un error al comunicarse con el servidor o procesar la respuesta. Consulta la consola para mas detalles.']);
-                 displayResults(null); // Limpiar resultados si hubo error
-             }
+        if (calculationResult.success) {
+            displayResults(calculationResult.results); // displayResults ahora usa los resultados del objeto
+            DOM.craftingCalculatorForm.dataset.lastResults = JSON.stringify(calculationResult.results);
         } else {
-             console.error("Error: Element 'craftingCalculatorForm' not found for submit listener.");
+            // Errores de l\u00f3gica interna de performCraftingCalculations (si los hubiera)
+            displayErrors(calculationResult.errors || ['Ocurri\u00f3 un error desconocido durante el c\u00e1lculo.']);
         }
     }
 

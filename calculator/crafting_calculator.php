@@ -272,7 +272,7 @@ require_once __DIR__ . '/../config.php'; // Sube un nivel para encontrar config.
           </div>
       </footer>
 
-    <script src="./frontend/js/simple_ingredient_generator.js"></script>     <?php
+    <script src="./frontend/js/simple_ingredient_generator.js" defer></script>     <?php
      // Si tu calculadora usaba jQuery o cualquier otra libreria, incluyela aqui si es necesario
      ?>
 

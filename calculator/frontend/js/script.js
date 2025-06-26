@@ -1,4 +1,25 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Definiciones de datos (anteriormente en PHP)
+    const recipesJS = {
+        't3': { prev_tier: 't2', req_prev: 1, req_raw: 2 },
+        't4': { prev_tier: 't3', req_prev: 1, req_raw: 2 },
+        't5': { prev_tier: 't4', req_prev: 1, req_raw: 3 },
+        't6': { prev_tier: 't5', req_prev: 1, req_raw: 4 },
+        't7': { prev_tier: 't6', req_prev: 1, req_raw: 5 },
+        't8': { prev_tier: 't7', req_prev: 1, req_raw: 5 },
+        't2': { prev_tier: null, req_prev: 0, req_raw: 1 },
+    };
+
+    const buildingValuesJS = {
+        't2': 0,
+        't3': 8,
+        't4': 16,
+        't5': 32,
+        't6': 64,
+        't7': 128,
+        't8': 256,
+    };
+
     // Elementos del formulario
     const calculatorForm = document.getElementById('calculatorForm');
     const validationErrorsDiv = document.getElementById('validationErrors');
@@ -345,76 +366,195 @@ document.addEventListener('DOMContentLoaded', () => {
      * Recopila todos los valores de los inputs del formulario.
      * @returns {object} Un objeto con los valores de los inputs del formulario.
      */
-     function collectFormData() {
-        const formData = {};
-        // Recopila valores de inputs directos (no arrays)
-        ['rental_cost'].forEach(id => {
-            const input = document.getElementById(id);
-            if (input) formData[id] = input.value;
+     function collectAndParseFormData() {
+        const parsedData = {};
+
+        // Helper para parsear floats
+        const getFloat = (elementId, defaultValue = 0) => {
+            const el = document.getElementById(elementId);
+            return el ? parseFloat(el.value) || defaultValue : defaultValue;
+        };
+        // Helper para parsear strings (selects)
+        const getString = (elementId, defaultValue = '') => {
+            const el = document.getElementById(elementId);
+            return el ? el.value : defaultValue;
+        };
+
+        parsedData.rental_cost = getFloat('rental_cost');
+        parsedData.purchase_percentage = getFloat('purchase_percentage');
+        parsedData.sales_percentage = getFloat('sales_percentage');
+        parsedData.tax_percentage = getFloat('tax_percentage');
+        parsedData.return_percentage = getFloat('return_percentage');
+        parsedData.starting_tier = getString('starting_tier');
+        parsedData.crafting_limit_tier = getString('crafting_limit_tier');
+
+        const initialHidesEl = document.querySelector('[name="initial_quantities[hides]"]');
+        parsedData.initial_quantities = {
+            hides: initialHidesEl ? parseFloat(initialHidesEl.value) || 0 : 0,
+            leather: 0 // Siempre es 0 como input para esta calculadora
+        };
+
+        parsedData.buying_prices = {};
+        allTiers.slice(0, -1).forEach(tier => { // T2 a T7
+            const input = document.querySelector(`[name="buying_prices[${tier}]"]`);
+            parsedData.buying_prices[tier] = input ? parseFloat(input.value) || 0 : 0;
         });
-        // Recopila valores de selects
-         ['purchase_percentage', 'sales_percentage', 'tax_percentage', 'return_percentage', 'starting_tier', 'crafting_limit_tier'].forEach(id => {
-             const select = document.getElementById(id);
-             if (select) formData[id] = select.value;
-         });
 
-        // Recopila valores de initial_quantities (solo 'hides')
-        const initialHidesInput = document.querySelector('[name="initial_quantities[hides]"]');
-        if (initialHidesInput) formData['initial_hides'] = initialHidesInput.value;
-
-
-        // Recopila valores de buying_prices (din\u00e1mico)
-        formData['buying_prices'] = {};
-        // Solo obtenemos los valores de los inputs currently visible
-        buyingPriceInputDiv.querySelectorAll('input[type="number"]').forEach(input => {
-            const match = input.name.match(/\[(t\d+)\]/);
-            if (match && match[1]) {
-                formData.buying_prices[match[1]] = input.value;
-            }
+        parsedData.raw_hide_costs = {};
+        allTiers.forEach(tier => { // T2 a T8
+            const input = document.querySelector(`[name="raw_hide_costs[${tier}]"]`);
+            parsedData.raw_hide_costs[tier] = input ? parseFloat(input.value) || 0 : 0;
         });
-         // Asegurarse de que TODOS los tiers posibles (T2-T7) est\u00e9n presentes en el objeto guardado,
-         // aunque con valor 0 si no estaban visibles.
-         allTiers.slice(0, -1).forEach(buyTier => {
-             if (formData.buying_prices[buyTier] === undefined) {
-                 formData.buying_prices[buyTier] = '0';
-             }
-         });
 
-
-        // Recopila valores de raw_hide_costs (din\u00e1mico)
-        formData['raw_hide_costs'] = {};
-        rawHideCostsInputsDiv.querySelectorAll('input[type="number"]').forEach(input => {
-             const match = input.name.match(/\[(t\d+)\]/);
-             if (match && match[1]) {
-                 formData.raw_hide_costs[match[1]] = input.value;
-             }
+        parsedData.selling_prices = {};
+        allTiers.forEach(tier => { // T2 a T8
+            const input = document.querySelector(`[name="selling_prices[${tier}]"]`);
+            parsedData.selling_prices[tier] = input ? parseFloat(input.value) || 0 : 0;
         });
-         // Asegurarse de que TODOS los tiers posibles (T2-T8) est\u00e9n presentes
-         allTiers.forEach(tier => {
-             if (formData.raw_hide_costs[tier] === undefined) {
-                 formData.raw_hide_costs[tier] = '0';
-             }
-         });
 
-
-        // Recopila valores de selling_prices (din\u00e1mico)
-        formData['selling_prices'] = {};
-        sellingPricesInputsDiv.querySelectorAll('input[type="number"]').forEach(input => {
-             const match = input.name.match(/\[(t\d+)\]/);
-             if (match && match[1]) {
-                 formData.selling_prices[match[1]] = input.value;
-             }
-        });
-         // Asegurarse de que TODOS los tiers posibles (T2-T8) est\u00e9n presentes
-         allTiers.forEach(tier => {
-             if (formData.selling_prices[tier] === undefined) {
-                 formData.selling_prices[tier] = '0';
-             }
-         });
-
-
-        return formData;
+        console.log("Collected and Parsed Form Data:", parsedData);
+        return parsedData;
      }
+
+
+    // --- Funciones de C\u00e1lculo Portadas de PHP a JS ---
+
+    /**
+     * Calcula la cantidad total de cuero producido dado una cantidad inicial de pieles en bruto
+     * de ese tier y la receta.
+     * (Portado de calculateLeatherFromRawHides en PHP)
+     */
+    function calculateLeatherFromRawHidesJS(initialRawHides, returnPercentage, reqRawPerCraft) {
+        if (initialRawHides <= 0 || reqRawPerCraft <= 0) return 0;
+
+        const retornoFraccion = returnPercentage / 100;
+        let hidesAvailable = initialRawHides;
+        let leatherProduced = 0;
+
+        while (hidesAvailable >= reqRawPerCraft) {
+            const craftableThisRound = Math.floor(hidesAvailable / reqRawPerCraft);
+            if (craftableThisRound < 1) break;
+
+            leatherProduced += craftableThisRound;
+            const consumedHides = craftableThisRound * reqRawPerCraft;
+            hidesAvailable -= consumedHides;
+
+            const returnedHides = consumedHides * retornoFraccion;
+            hidesAvailable += returnedHides;
+        }
+        return Math.floor(leatherProduced);
+    }
+
+    /**
+     * Simula el refinamiento binario de un material de input (cuero de tier anterior)
+     * para producir el \u00edtem del tier actual.
+     * (Portado de simulateTierProductionFromPrevious en PHP)
+     */
+    function simulateTierProductionFromPreviousJS(availablePrevMaterial, reqPrevPerCraft, returnPercentage) {
+        if (availablePrevMaterial <= 0 || reqPrevPerCraft <= 0) return 0;
+
+        const returnFraction = returnPercentage / 100;
+        let materialAvailable = availablePrevMaterial;
+        let itemsProduced = 0;
+
+        while (materialAvailable >= reqPrevPerCraft) {
+            const craftableThisRound = Math.floor(materialAvailable / reqPrevPerCraft);
+            if (craftableThisRound < 1) break;
+
+            itemsProduced += craftableThisRound;
+            const consumedMaterial = craftableThisRound * reqPrevPerCraft;
+            materialAvailable -= consumedMaterial;
+
+            const returnedMaterial = consumedMaterial * returnFraction;
+            materialAvailable += returnedMaterial;
+        }
+        return Math.floor(itemsProduced);
+    }
+
+    /**
+     * Calcula la cantidad m\u00ednima de un material de input necesaria para craftear una cantidad objetivo
+     * de un \u00edtem que requiere ese material, considerando el retorno sobre el consumo de ese material.
+     * (Portado de calculateRequiredInputWithReturn en PHP)
+     */
+    function calculateRequiredInputWithReturnJS(targetOutputQuantity, requiredPerCraft, returnPercentage) {
+        if (targetOutputQuantity <= 0 || requiredPerCraft <= 0) return 0;
+
+        const returnFraction = returnPercentage / 100;
+
+        const checkCanProduce = (initial_input) => {
+            let inputAvailable = initial_input;
+            let outputProduced = 0;
+
+            while (inputAvailable >= requiredPerCraft) {
+                const canCraftThisRound = Math.floor(inputAvailable / requiredPerCraft);
+                const craftThisRound = Math.min(canCraftThisRound, targetOutputQuantity - outputProduced);
+
+                if (craftThisRound <= 0) break;
+
+                outputProduced += craftThisRound;
+                const consumedInput = craftThisRound * requiredPerCraft;
+                inputAvailable -= consumedInput;
+                const returnedInput = consumedInput * returnFraction;
+                inputAvailable += returnedInput;
+
+                if (outputProduced >= targetOutputQuantity) return true;
+            }
+            return outputProduced >= targetOutputQuantity;
+        };
+
+        // Ajustar los l\u00edmites de b\u00fasqueda para evitar bucles infinitos con inputs muy peque\u00f1os o retornos altos.
+        // El l\u00edmite inferior debe ser al menos targetOutputQuantity si no hay retorno y se requiere 1 por crafteo.
+        // El l\u00edmite superior puede ser targetOutputQuantity * requiredPerCraft como una estimaci\u00f3n inicial.
+        let low = Math.ceil(targetOutputQuantity * requiredPerCraft * (1 - returnFraction)) -1; // Estimaci\u00f3n m\u00ednima te\u00f3rica
+        if (low <0) low = 0;
+
+        let high = targetOutputQuantity * requiredPerCraft * 2; // Estimaci\u00f3n inicial generosa del l\u00edmite superior
+
+        // Asegurarse de que el l\u00edmite superior inicial sea suficiente
+        let iterations = 0;
+        const maxIterations = 20; // Prevenir bucles infinitos si algo va mal
+        while (!checkCanProduce(high) && iterations < maxIterations) {
+            high = high * 2;
+            if (high > Number.MAX_SAFE_INTEGER / 2) {
+                 console.error("High value too large in calculateRequiredInputWithReturnJS, breaking.");
+                 return Math.ceil(targetOutputQuantity * requiredPerCraft); // Fallback: sin retorno
+            }
+            iterations++;
+        }
+        if (iterations >= maxIterations && !checkCanProduce(high)) {
+            console.error("Could not find a high enough value in calculateRequiredInputWithReturnJS. Fallback.");
+            return Math.ceil(targetOutputQuantity * requiredPerCraft); // Fallback
+        }
+
+
+        let minRequired = high; // Inicializar con un valor que sabemos que funciona
+
+        // B\u00fasqueda binaria para encontrar la cantidad m\u00ednima requerida
+        let searchLow = low; // Usar el 'low' calculado
+        let searchHigh = high;
+        iterations = 0; // Resetear contador para la b\u00fasqueda binaria
+
+        while (searchLow <= searchHigh && iterations < 100) { // A\u00f1adir l\u00edmite de iteraciones
+            const mid = Math.floor((searchLow + searchHigh) / 2);
+            if (mid < 0) { // Asegurar que mid no sea negativo
+                searchLow = 0; // Ajustar y continuar o romper si es necesario
+                continue;
+            }
+            if (checkCanProduce(mid)) {
+                minRequired = mid; // mid puede ser la respuesta, intenta con menos
+                searchHigh = mid - 1;
+            } else {
+                searchLow = mid + 1; // mid no es suficiente, necesita m\u00e1s
+            }
+            iterations++;
+        }
+         if (iterations >= 100) {
+            console.warn("Max iterations reached in binary search for calculateRequiredInputWithReturnJS. Result might not be optimal.");
+        }
+
+        return Math.ceil(minRequired); // Redondear hacia arriba ya que no puedes tener fracciones de items de input
+    }
+    // getPrevTier ya existe en el JS, se usar\u00e1 esa.
 
 
     // --- Funciones de Gesti\u00f3n de LocalStorage e Historial ---
@@ -461,7 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
              return;
          }
 
-         const currentData = collectFormData();
+         const currentData = collectAndParseFormData(); // <--- CAMBIO AQU\u00cd
          // A\u00f1adir un ID \u00fanico y el nombre
          const calculationRecord = {
              id: Date.now() + Math.random().toString(16).slice(2), // ID simple basado en tiempo + aleatorio
@@ -820,10 +960,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         // Listener para el env\u00edo del formulario
-        calculatorForm.addEventListener('submit', async (event) => {
-            console.log("Submit button clicked!");
-
+        calculatorForm.addEventListener('submit', (event) => {
             event.preventDefault();
+            console.log("Submit button clicked! Performing calculations in JS (Leather Calculator).");
 
             // Limpiar resultados anteriores y errores
             validationErrorsDiv.innerHTML = '';
@@ -831,56 +970,296 @@ document.addEventListener('DOMContentLoaded', () => {
             summaryResultsDiv.innerHTML = '<h2 class="text-xl font-bold mb-4">Resumen General</h2>';
             tierResultsDiv.innerHTML = '<h2 class="text-xl font-bold mb-4">Resultados por Tier</h2>';
 
-            // Recopilar datos del formulario (usando la funci\u00f3n collectFormData)
-            const formData = new FormData(calculatorForm); // Seguir usando FormData para enviar al backend
+            const parsedFormData = collectAndParseFormData();
+            const validationErrors = validateLeatherCalculatorInput(parsedFormData);
 
-            // Asegurar que initial_quantities[leather] est\u00e9 presente con valor 0
-            if (!formData.has('initial_quantities[leather]')) {
-                formData.append('initial_quantities[leather]', '0');
+            if (validationErrors.length > 0) {
+                displayErrors(validationErrors);
+                return;
             }
 
-             // Asegurarse de que todos los tiers de buying_prices de T2 a T7 est\u00e9n presentes
-             const tiersForBuyingPrices = allTiers.slice(0, -1); // T2 a T7
-             tiersForBuyingPrices.forEach(buyTier => {
-                 const inputName = `buying_prices[${buyTier}]`;
-                 const existingInput = document.querySelector(`[name="${inputName}"]`);
-                  if (!formData.has(inputName)) {
-                      formData.append(inputName, existingInput ? existingInput.value : '0');
-                  } else {
-                      if (formData.get(inputName) === '') {
-                          formData.set(inputName, '0');
-                      }
-                  }
-             });
+            const results = performLeatherCalculations(parsedFormData);
+            displayResults(results);
+        });
 
 
-            try {
-                const response = await fetch('backend/calculate.php', {
-                    method: 'POST',
-                    body: formData,
-                });
-                const result = await response.json();
+    function validateLeatherCalculatorInput(formData) {
+        const errors = [];
+        const numericFields = ['rental_cost', 'purchase_percentage', 'sales_percentage', 'tax_percentage', 'return_percentage'];
+        numericFields.forEach(field => {
+            if (isNaN(formData[field]) || formData[field] < 0) {
+                errors.push(`El campo ${field} es requerido y debe ser un n\u00famero positivo.`);
+            }
+        });
+        if (isNaN(formData.initial_quantities.hides) || formData.initial_quantities.hides < 0) {
+             errors.push('El campo Cantidad Inicial de Pieles es requerido y debe ser un n\u00famero positivo.');
+        }
 
-                if (result.success) {
-                    displayResults(result.results);
-                    // Opcional: Guardar el c\u00e1lculo autom\u00e1ticamente al calcular
-                    // addCurrentCalculationToHistory(); // Descomenta si quieres que guarde al calcular tambi\u00e9n y pide nombre
-                    // O si quieres guardar SIN pedir nombre:
-                    // const currentData = collectFormData();
-                    // const calculationRecord = { id: Date.now() + Math.random().toString(16).slice(2), name: `C\u00e1lculo ${new Date().toLocaleString()}`, data: currentData };
-                    // let history = getCalculationHistory(); history.unshift(calculationRecord);
-                    // if (history.length > HISTORY_LIMIT) history = history.slice(0, HISTORY_LIMIT);
-                    // saveCalculationHistory(history); displayCalculationHistory();
-                } else {
-                    displayErrors(result.errors || [result.error]);
+        const validStartingTiers = allTiers.slice(0, -1); // T2 a T7
+        const validCraftingTiers = allTiers; // T2 a T8
+
+        if (!formData.starting_tier || !validStartingTiers.includes(formData.starting_tier)) {
+            errors.push('El tier de inicio seleccionado es inv\u00e1lido.');
+        }
+        if (!formData.crafting_limit_tier || !validCraftingTiers.includes(formData.crafting_limit_tier)) {
+            errors.push('El tier l\u00edmite de crafteo seleccionado es inv\u00e1lido.');
+        }
+
+        const startIndexVal = allTiers.indexOf(formData.starting_tier);
+        const limitIndexVal = allTiers.indexOf(formData.crafting_limit_tier);
+
+        if (startIndexVal === -1 || limitIndexVal === -1) {
+            if (!errors.some(e => e.includes("tier de inicio") || e.includes("tier l\u00edmite"))) { // Evitar error duplicado si ya existe uno sobre el tier
+                 errors.push('Uno de los tiers seleccionados no es v\u00e1lido para la comparaci\u00f3n de \u00edndices.');
+            }
+        } else if (startIndexVal > limitIndexVal) {
+            errors.push('El tier l\u00edmite de crafteo no puede ser menor que el tier de inicio.');
+        }
+
+        const validReturnPercentages = [36.7, 43.5, 53.9];
+        if (!validReturnPercentages.includes(formData.return_percentage)) {
+             errors.push('El porcentaje de retorno seleccionado es inv\u00e1lido.');
+        }
+
+        if (formData.crafting_limit_tier && formData.selling_prices[formData.crafting_limit_tier] !== undefined) {
+            if (isNaN(formData.selling_prices[formData.crafting_limit_tier]) || formData.selling_prices[formData.crafting_limit_tier] < 0) {
+                errors.push(`El valor para el precio de venta en el tier ${formData.crafting_limit_tier} es inv\u00e1lido o falta.`);
+            }
+        } else if (formData.crafting_limit_tier && validCraftingTiers.includes(formData.crafting_limit_tier)) { // Solo si el tier l\u00edmite es v\u00e1lido
+            errors.push(`Falta el precio de venta para el tier l\u00edmite ${formData.crafting_limit_tier}.`);
+        }
+
+
+        if (startIndexVal !== -1 && limitIndexVal !== -1 && startIndexVal <= limitIndexVal) {
+            for (let i = startIndexVal; i <= limitIndexVal; i++) {
+                 const currentTierVal = allTiers[i];
+                 if (formData.raw_hide_costs[currentTierVal] === undefined || isNaN(formData.raw_hide_costs[currentTierVal]) || formData.raw_hide_costs[currentTierVal] < 0) {
+                     errors.push(`El valor para los costos de pieles en bruto en el tier ${currentTierVal} es inv\u00e1lido o falta.`);
+                 }
+            }
+        }
+
+        if (formData.starting_tier && formData.starting_tier !== 't2' && validStartingTiers.includes(formData.starting_tier)) { // Solo si el tier de inicio es v\u00e1lido
+            const prevTierForStarting = getPrevTier(formData.starting_tier);
+            if (prevTierForStarting) {
+                if (formData.buying_prices[prevTierForStarting] === undefined || isNaN(formData.buying_prices[prevTierForStarting]) || formData.buying_prices[prevTierForStarting] < 0) {
+                    errors.push(`El valor para el precio de compra en el tier ${prevTierForStarting} es inv\u00e1lido o falta.`);
                 }
-            } catch (error) {
-                console.error('Error al realizar el c\u00e1lculo:', error);
-                displayErrors(['Ocurri\u00f3 un error al comunicarse con el servidor.']);
+            }
+        }
+        return errors;
+    }
+
+    function performLeatherCalculations(formData) {
+        const {
+            starting_tier, crafting_limit_tier, rental_cost, purchase_percentage,
+            sales_percentage, tax_percentage, return_percentage, initial_quantities,
+            selling_prices, raw_hide_costs, buying_prices
+        } = formData;
+
+        const purchaseMultiplier = 1 + (purchase_percentage / 100);
+        const totalSaleTaxPercentage = sales_percentage + tax_percentage;
+        const netSellingPriceMultiplier = 1 - (totalSaleTaxPercentage / 100);
+
+        const craftedQuantity = Object.fromEntries(allTiers.map(tier => [tier, 0]));
+        const requiredRawHides = Object.fromEntries(allTiers.map(tier => [tier, 0]));
+        const requiredLeather = Object.fromEntries(allTiers.map(tier => [tier, 0]));
+        const totalCostPerTier = Object.fromEntries(allTiers.map(tier => [tier, 0]));
+        const costPerUnit = Object.fromEntries(allTiers.map(tier => [tier, 0]));
+        const netSellingPricePerTier = Object.fromEntries(allTiers.map(tier => [tier, 0]));
+        const profitLossAmountPerTier = Object.fromEntries(allTiers.map(tier => [tier, 0]));
+        const profitLossPercentagePerTier = Object.fromEntries(allTiers.map(tier => [tier, 0]));
+        const tierStatus = Object.fromEntries(allTiers.map(tier => [tier, 'not_crafted']));
+        const totalRentalCostPerTier = Object.fromEntries(allTiers.map(tier => [tier, 0]));
+        const rentalCostPerUnit = Object.fromEntries(allTiers.map(tier => [tier, 0]));
+
+        const startIndex = allTiers.indexOf(starting_tier);
+        const limitIndex = allTiers.indexOf(crafting_limit_tier);
+        let availableLeatherFromPreviousTier = 0;
+
+        for (let i = startIndex; i <= limitIndex; i++) {
+            const currentTier = allTiers[i];
+            const recipe = recipesJS[currentTier];
+            if (!recipe) {
+                console.error(`No se encontr\u00f3 receta para el tier: ${currentTier}`);
+                tierStatus[currentTier] = 'not_crafted';
+                continue;
+            }
+            const prevTier = recipe.prev_tier;
+            const reqPrev = recipe.req_prev;
+            const reqRaw = recipe.req_raw;
+            const rawCost = (raw_hide_costs[currentTier] || 0) * purchaseMultiplier;
+
+            netSellingPricePerTier[currentTier] = (selling_prices[currentTier] || 0) * netSellingPriceMultiplier;
+            let costOfInputMaterialsForTier = 0;
+
+            const startingTierIndex = startIndex;
+            const prevTierIndex = (prevTier !== null) ? allTiers.indexOf(prevTier) : -1;
+
+            if (currentTier === starting_tier) {
+                const initialRawHidesForStartingTier = initial_quantities.hides;
+                const producedStartingLeather = calculateLeatherFromRawHidesJS(initialRawHidesForStartingTier, return_percentage, reqRaw);
+                craftedQuantity[currentTier] = Math.floor(producedStartingLeather);
+
+                if (craftedQuantity[currentTier] <= 0) {
+                    availableLeatherFromPreviousTier = 0;
+                    tierStatus[currentTier] = 'not_crafted';
+                    continue;
+                }
+                requiredRawHides[currentTier] = initialRawHidesForStartingTier;
+
+                if (startingTierIndex > 0 && prevTier && reqPrev > 0) {
+                    requiredLeather[currentTier] = calculateRequiredInputWithReturnJS(craftedQuantity[currentTier], reqPrev, return_percentage);
+                } else {
+                    requiredLeather[currentTier] = 0;
+                }
+
+                const costOfConsumedRawHides = initialRawHidesForStartingTier * rawCost;
+                let costOfConsumedLeather = 0;
+                if (startingTierIndex > 0 && prevTier && reqPrev > 0) {
+                     costOfConsumedLeather = (requiredLeather[currentTier] || 0) * (buying_prices[prevTier] || 0);
+                }
+                costOfInputMaterialsForTier = costOfConsumedRawHides + costOfConsumedLeather;
+                availableLeatherFromPreviousTier = craftedQuantity[currentTier];
+            } else {
+                const availablePrevTierLeatherForCrafting = availableLeatherFromPreviousTier;
+                if (availablePrevTierLeatherForCrafting < reqPrev && reqPrev > 0) {
+                    availableLeatherFromPreviousTier = 0;
+                    tierStatus[currentTier] = 'not_crafted';
+                    continue;
+                }
+
+                craftedQuantity[currentTier] = simulateTierProductionFromPreviousJS(availablePrevTierLeatherForCrafting, reqPrev, return_percentage);
+
+                if (craftedQuantity[currentTier] <= 0) {
+                    availableLeatherFromPreviousTier = 0;
+                    tierStatus[currentTier] = 'not_crafted';
+                    continue;
+                }
+
+                requiredRawHides[currentTier] = calculateRequiredInputWithReturnJS(craftedQuantity[currentTier], reqRaw, return_percentage);
+                if (reqPrev > 0) {
+                    requiredLeather[currentTier] = calculateRequiredInputWithReturnJS(craftedQuantity[currentTier], reqPrev, return_percentage);
+                } else {
+                    requiredLeather[currentTier] = 0;
+                }
+
+                let costOfConsumedLeather = 0;
+                if (prevTierIndex !== -1 && prevTierIndex < startingTierIndex && reqPrev > 0) {
+                    costOfConsumedLeather = (requiredLeather[currentTier] || 0) * (buying_prices[prevTier] || 0);
+                } else if (prevTier && reqPrev > 0) {
+                    costOfConsumedLeather = (requiredLeather[currentTier] || 0) * (costPerUnit[prevTier] || 0);
+                }
+                const costOfConsumedRawHides = (requiredRawHides[currentTier] * rawCost);
+                costOfInputMaterialsForTier = costOfConsumedLeather + costOfConsumedRawHides;
+                availableLeatherFromPreviousTier = craftedQuantity[currentTier];
+            }
+
+            const buildingValue = buildingValuesJS[currentTier] || 0;
+            const rentalCostForTier = (craftedQuantity[currentTier] > 0) ? (rental_cost / 100) * buildingValue * 0.1125 * craftedQuantity[currentTier] : 0;
+            totalRentalCostPerTier[currentTier] = rentalCostForTier;
+            rentalCostPerUnit[currentTier] = (craftedQuantity[currentTier] > 0) ? rentalCostForTier / craftedQuantity[currentTier] : 0;
+
+            totalCostPerTier[currentTier] = costOfInputMaterialsForTier + totalRentalCostPerTier[currentTier];
+            costPerUnit[currentTier] = (craftedQuantity[currentTier] > 0) ? totalCostPerTier[currentTier] / craftedQuantity[currentTier] : 0;
+
+            profitLossAmountPerTier[currentTier] = (netSellingPricePerTier[currentTier] - (costPerUnit[currentTier] || 0)) * craftedQuantity[currentTier];
+            const investmentForPercentage = (totalCostPerTier[currentTier] || 0);
+
+            if (investmentForPercentage === 0) {
+                profitLossPercentagePerTier[currentTier] = profitLossAmountPerTier[currentTier] > 0 ? Infinity : 0;
+            } else {
+                profitLossPercentagePerTier[currentTier] = (profitLossAmountPerTier[currentTier] / investmentForPercentage) * 100;
+            }
+
+            if (craftedQuantity[currentTier] > 0) {
+                tierStatus[currentTier] = ((netSellingPricePerTier[currentTier] || 0) >= (costPerUnit[currentTier] || 0)) ? 'profit' : 'loss';
+            } else {
+                tierStatus[currentTier] = 'not_crafted';
+            }
+        }
+
+        const resultsForDisplay = {};
+        let totalRawHideCostSummary = 0;
+        let totalAcquiredLeatherCostSummary = 0;
+        let totalRentalCostSummary = 0;
+
+        const resultTiers = allTiers.slice(startIndex, limitIndex + 1);
+
+        resultTiers.forEach(tier => {
+            const prevTier = getPrevTier(tier);
+            const startingTierIdx = allTiers.indexOf(starting_tier);
+            const prevTierIdx = prevTier ? allTiers.indexOf(prevTier) : -1;
+            let buyingPriceForDisplay = 0;
+            if (prevTierIdx !== -1 && prevTierIdx < startingTierIdx && buying_prices[prevTier] !== undefined) {
+                 buyingPriceForDisplay = buying_prices[prevTier] || 0;
+            }
+
+            resultsForDisplay[tier] = {
+                quantity: craftedQuantity[tier],
+                required_raw_hides: Math.round(requiredRawHides[tier]),
+                required_leather: Math.round(requiredLeather[tier]),
+                cost_per_unit: parseFloat(costPerUnit[tier].toFixed(2)),
+                rental_cost_per_unit: parseFloat(rentalCostPerUnit[tier].toFixed(2)),
+                selling_price: selling_prices[tier] || 0,
+                net_selling_price: parseFloat(netSellingPricePerTier[tier].toFixed(2)),
+                buying_price_prev_tier_material: parseFloat(buyingPriceForDisplay.toFixed(2)),
+                profit_loss_amount: parseFloat(profitLossAmountPerTier[tier].toFixed(2)),
+                profit_loss_percentage: parseFloat(profitLossPercentagePerTier[tier].toFixed(2)),
+                status: tierStatus[tier],
+            };
+            if ((craftedQuantity[tier] || 0) > 0) {
+                totalRentalCostSummary += (totalRentalCostPerTier[tier] || 0);
             }
         });
 
-        // Delegaci\u00f3n de eventos para los items del historial (cargar y eliminar)
+        totalRawHideCostSummary += (initial_quantities.hides || 0) * ((raw_hide_costs[starting_tier] || 0) * purchaseMultiplier);
+        for (let i = startIndex + 1; i <= limitIndex; i++) {
+            const currentTier = allTiers[i];
+            if ((craftedQuantity[currentTier] || 0) > 0) {
+                totalRawHideCostSummary += (requiredRawHides[currentTier] || 0) * ((raw_hide_costs[currentTier] || 0) * purchaseMultiplier);
+            }
+        }
+
+        for (let i = startIndex; i <= limitIndex; i++) {
+            const currentTier = allTiers[i];
+            const recipe = recipesJS[currentTier];
+            if (!recipe) continue;
+            const prevTier = recipe.prev_tier;
+            const prevTierIdx = prevTier ? allTiers.indexOf(prevTier) : -1;
+            const startingTierIdx = allTiers.indexOf(starting_tier);
+
+            if ((craftedQuantity[currentTier] || 0) > 0 && prevTierIdx !== -1 && prevTierIdx < startingTierIdx && buying_prices[prevTier] !== undefined) {
+                totalAcquiredLeatherCostSummary += (requiredLeather[currentTier] || 0) * (buying_prices[prevTier] || 0);
+            }
+        }
+
+        const totalMaterialInvestmentSummary = totalRawHideCostSummary + totalAcquiredLeatherCostSummary;
+        const finalTier = crafting_limit_tier;
+        const totalRevenue = (resultsForDisplay[finalTier]?.quantity || 0) * (resultsForDisplay[finalTier]?.net_selling_price || 0);
+        const netProfitLossSummary = totalRevenue - totalMaterialInvestmentSummary - totalRentalCostSummary;
+        const totalInvestmentForPercentageOverall = totalMaterialInvestmentSummary + totalRentalCostSummary;
+
+        let netProfitLossPercentageSummary = 0;
+        if (totalInvestmentForPercentageOverall > 0) {
+            netProfitLossPercentageSummary = (netProfitLossSummary / totalInvestmentForPercentageOverall) * 100;
+        } else if (netProfitLossSummary > 0) {
+            netProfitLossPercentageSummary = Infinity;
+        }
+
+        resultsForDisplay.summary = {
+            total_raw_hide_cost: parseFloat(totalRawHideCostSummary.toFixed(2)),
+            total_acquired_leather_cost: parseFloat(totalAcquiredLeatherCostSummary.toFixed(2)),
+            total_material_investment: parseFloat(totalMaterialInvestmentSummary.toFixed(2)),
+            total_rental_cost: parseFloat(totalRentalCostSummary.toFixed(2)),
+            total_revenue: parseFloat(totalRevenue.toFixed(2)),
+            net_profit_loss: parseFloat(netProfitLossSummary.toFixed(2)),
+            net_profit_loss_percentage: parseFloat(netProfitLossPercentageSummary.toFixed(2)),
+        };
+
+        return resultsForDisplay;
+    }
+        // Delegaci\u00f3n de eventos para los items del historial (cargar y eliminar) - SIN CAMBIOS
         // Adjuntamos el listener al contenedor principal de la lista (historyListUl)
         historyListUl.addEventListener('click', (event) => {
             const target = event.target;
