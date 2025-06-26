@@ -284,25 +284,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         results.summary.net_profit_loss_percentage = results.summary.total_crafting_cost > 0 ? (summary_net_profit_loss / results.summary.total_crafting_cost) * 100 : (summary_net_profit_loss >=0 ? 0 : -Infinity);
 
-        // --- Resultados por unidad ---
-        const total_items_produced_all_cycles = crafted_units * fabrication_cycles;
+        // --- Resultados por unidad (replicando la l\u00f3gica PHP exacta para la secci\u00f3n per_unit) ---
 
-        // Costo por unidad de ingrediente (basado en un ciclo, como en el PHP original)
+        // Ganancia/P\u00e9rdida Neta para UN CICLO (calculada como en PHP para la secci\u00f3n per_unit)
+        const single_cycle_net_profit_loss = single_cycle_net_sales_revenue - single_cycle_crafting_cost;
+
         results.per_unit.ingredient_cost = crafted_units > 0 ? total_ingredient_cost_with_purchase_tax_one_cycle / crafted_units : 0;
-        // Costo por unidad de alquiler (basado en un ciclo, como en el PHP original)
         results.per_unit.rental_cost = crafted_units > 0 ? single_cycle_rental_cost / crafted_units : 0;
-
-        // **** AJUSTE PRINCIPAL: Costo por Unidad Final (total_crafting_cost) considera todos los lotes ****
-        results.per_unit.total_crafting_cost = total_items_produced_all_cycles > 0 ? results.summary.total_crafting_cost / total_items_produced_all_cycles : 0;
-
+        results.per_unit.total_crafting_cost = crafted_units > 0 ? single_cycle_crafting_cost / crafted_units : 0; // Costo unitario de 1 ciclo
         results.per_unit.selling_price = product_selling_price; // Precio de venta original por unidad
-        // Precio de venta neto por unidad (basado en un ciclo, como en el PHP original)
-        results.per_unit.net_selling_price = crafted_units > 0 ? single_cycle_net_sales_revenue / crafted_units : 0;
+        results.per_unit.net_selling_price = crafted_units > 0 ? single_cycle_net_sales_revenue / crafted_units : 0; // Precio de venta neto unitario de 1 ciclo
+        results.per_unit.net_profit_loss = crafted_units > 0 ? single_cycle_net_profit_loss / crafted_units : 0; // Ganancia unitaria de 1 ciclo
 
-        // Ganancia/P\u00e9rdida neta por unidad (usa el nuevo costo unitario promedio global)
-        results.per_unit.net_profit_loss = results.per_unit.net_selling_price - results.per_unit.total_crafting_cost;
-
-        // Porcentaje de ganancia/p\u00e9rdida por unidad (basado en el nuevo costo unitario promedio global)
+        // Porcentaje de ganancia/p\u00e9rdida por unidad (basado en el costo unitario de 1 ciclo, como en PHP)
         results.per_unit.net_profit_loss_percentage = results.per_unit.total_crafting_cost > 0 ? (results.per_unit.net_profit_loss / results.per_unit.total_crafting_cost) * 100 : (results.per_unit.net_profit_loss >= 0 ? 0 : -Infinity);
 
         return { success: true, results: results, errors: [] };
