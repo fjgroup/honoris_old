@@ -154,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateDynamicInputs() {
         // 1. Guardar los valores actuales antes de borrar los inputs
         const currentValues = getCurrentInputValues();
-        console.log("Valor de currentValues:", currentValues); // MENSAJE DE PRUEBA
+        // console.log("Valor de currentValues:", currentValues); // MENSAJE DE PRUEBA ELIMINADO
 
 
         const startingTier = startingTierSelect.value;
@@ -956,31 +956,35 @@ document.addEventListener('DOMContentLoaded', () => {
         craftingLimitTierSelect.addEventListener('change', updateDynamicInputs);
 
         // Listener para el bot\u00f3n "Guardar C\u00e1lculo"
-        saveCalculationButton.addEventListener('click', addCurrentCalculationToHistory); // <-- Llama a la nueva funci\u00f3n addCurrentCalculationToHistory
+        if (saveCalculationButton) { // Asegurarse que el bot\u00f3n exista
+            saveCalculationButton.addEventListener('click', addCurrentCalculationToHistory);
+        }
 
 
         // Listener para el env\u00edo del formulario
-        calculatorForm.addEventListener('submit', (event) => {
-            event.preventDefault();
-            console.log("Submit button clicked! Performing calculations in JS (Leather Calculator).");
+        if (calculatorForm) { // Asegurarse que el formulario exista
+            calculatorForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                console.log("Submit button clicked! Performing calculations in JS (Leather Calculator).");
 
-            // Limpiar resultados anteriores y errores
-            validationErrorsDiv.innerHTML = '';
-            validationErrorsDiv.classList.remove('p-4', 'border', 'border-red-400', 'bg-red-100', 'rounded-md', 'mb-4');
-            summaryResultsDiv.innerHTML = '<h2 class="text-xl font-bold mb-4">Resumen General</h2>';
-            tierResultsDiv.innerHTML = '<h2 class="text-xl font-bold mb-4">Resultados por Tier</h2>';
+                // Limpiar resultados anteriores y errores
+                validationErrorsDiv.innerHTML = '';
+                validationErrorsDiv.classList.remove('p-4', 'border', 'border-red-400', 'bg-red-100', 'rounded-md', 'mb-4');
+                summaryResultsDiv.innerHTML = '<h2 class="text-xl font-bold mb-4">Resumen General</h2>';
+                tierResultsDiv.innerHTML = '<h2 class="text-xl font-bold mb-4">Resultados por Tier</h2>';
 
-            const parsedFormData = collectAndParseFormData();
-            const validationErrors = validateLeatherCalculatorInput(parsedFormData);
+                const parsedFormData = collectAndParseFormData();
+                const validationErrors = validateLeatherCalculatorInput(parsedFormData);
 
-            if (validationErrors.length > 0) {
-                displayErrors(validationErrors);
-                return;
-            }
+                if (validationErrors.length > 0) {
+                    displayErrors(validationErrors);
+                    return;
+                }
 
-            const results = performLeatherCalculations(parsedFormData);
-            displayResults(results);
-        });
+                const results = performLeatherCalculations(parsedFormData);
+                displayResults(results);
+            });
+        }
 
 
     function validateLeatherCalculatorInput(formData) {
@@ -1021,12 +1025,13 @@ document.addEventListener('DOMContentLoaded', () => {
              errors.push('El porcentaje de retorno seleccionado es inv\u00e1lido.');
         }
 
-        if (formData.crafting_limit_tier && formData.selling_prices[formData.crafting_limit_tier] !== undefined) {
-            if (isNaN(formData.selling_prices[formData.crafting_limit_tier]) || formData.selling_prices[formData.crafting_limit_tier] < 0) {
+        // Validar que crafting_limit_tier sea un tier v\u00e1lido antes de usarlo como \u00edndice
+        if (formData.crafting_limit_tier && validCraftingTiers.includes(formData.crafting_limit_tier)) {
+            if (formData.selling_prices[formData.crafting_limit_tier] === undefined || isNaN(formData.selling_prices[formData.crafting_limit_tier]) || formData.selling_prices[formData.crafting_limit_tier] < 0) {
                 errors.push(`El valor para el precio de venta en el tier ${formData.crafting_limit_tier} es inv\u00e1lido o falta.`);
             }
-        } else if (formData.crafting_limit_tier && validCraftingTiers.includes(formData.crafting_limit_tier)) { // Solo si el tier l\u00edmite es v\u00e1lido
-            errors.push(`Falta el precio de venta para el tier l\u00edmite ${formData.crafting_limit_tier}.`);
+        } else if (formData.crafting_limit_tier && !errors.some(e => e.includes("tier l\u00edmite"))) { // Solo a\u00f1adir si no hay ya un error sobre el tier l\u00edmite
+             errors.push(`Falta el precio de venta para el tier l\u00edmite ${formData.crafting_limit_tier} o el tier es inv\u00e1lido.`);
         }
 
 
