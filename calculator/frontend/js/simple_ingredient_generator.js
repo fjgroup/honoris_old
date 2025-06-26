@@ -222,53 +222,56 @@ document.addEventListener('DOMContentLoaded', () => {
         const sales_percentage = data.sales_percentage;
         const return_percentage = data.return_percentage;
         const object_power = data.object_power;
-        const crafted_units = data.crafted_units;
-        const ingredients = data.ingredients;
+        const crafted_units = data.crafted_units; // Cantidad producida POR LOTE
+        const ingredients = data.ingredients; // Cantidad de ingrediente es POR UNIDAD DE PRODUCTO FINAL
         const ingredient_prices = data.ingredient_prices;
         const product_selling_price = data.product_selling_price;
-        const fabrication_cycles = data.fabrication_cycles;
+        const fabrication_cycles = data.fabrication_cycles; // N\u00famero de lotes
         const total_sunk_publication_cost_to_deduct = data.total_sunk_publication_cost_to_deduct;
         const fixed_publication_percentage = 2.5;
 
-        let total_ingredient_cost_before_purchase_tax = 0;
+        // Costo de ingredientes para UN LOTE (que produce 'crafted_units' items)
+        let total_ingredient_cost_before_purchase_tax_one_cycle = 0;
         const ingredientPricesMap = {};
         ingredient_prices.forEach(p => { ingredientPricesMap[p.name] = p.price; });
 
         ingredients.forEach(ingredient => {
             const ingredient_name = ingredient.name;
-            const required_quantity_for_one_cycle = ingredient.quantity * crafted_units; // Cantidad total del ingrediente para TODAS las 'crafted_units' en UN ciclo
+            // Cantidad del ingrediente_X necesaria para producir TODAS las 'crafted_units' en UN ciclo/lote
+            const required_ingredient_X_for_one_cycle = ingredient.quantity * crafted_units;
             const ingredient_price_per_unit = ingredientPricesMap[ingredient_name] || 0;
 
             const effective_purchase_rate = (100 - return_percentage) / 100;
-            // Cantidad de este ingrediente que realmente necesitas comprar para UN ciclo, despu\u00e9s del retorno
-            const actual_quantity_to_buy_for_one_cycle = required_quantity_for_one_cycle * effective_purchase_rate;
+            const actual_quantity_to_buy_for_one_cycle = required_ingredient_X_for_one_cycle * effective_purchase_rate;
             const cost_of_this_ingredient_for_one_cycle = actual_quantity_to_buy_for_one_cycle * ingredient_price_per_unit;
-            total_ingredient_cost_before_purchase_tax += cost_of_this_ingredient_for_one_cycle;
+            total_ingredient_cost_before_purchase_tax_one_cycle += cost_of_this_ingredient_for_one_cycle;
         });
 
-        const total_ingredient_cost_with_purchase_tax_one_cycle = total_ingredient_cost_before_purchase_tax * (1 + (purchase_percentage / 100));
+        const total_ingredient_cost_with_purchase_tax_one_cycle = total_ingredient_cost_before_purchase_tax_one_cycle * (1 + (purchase_percentage / 100));
+
+        // Costo de alquiler para UN LOTE
         const single_cycle_rental_cost = (rental_cost_value / 100) * (crafted_units * object_power) * 0.1125;
+
+        // Costo total de fabricaci\u00f3n para UN LOTE
         const single_cycle_crafting_cost = total_ingredient_cost_with_purchase_tax_one_cycle + single_cycle_rental_cost;
+
+        // Ingresos por venta para UN LOTE (bruto)
         const single_cycle_sales_revenue_gross = product_selling_price * crafted_units;
+
+        // Deducciones para UN LOTE
         const single_cycle_sales_deduction = single_cycle_sales_revenue_gross * (sales_percentage / 100);
         const single_cycle_current_publication_deduction = single_cycle_sales_revenue_gross * (fixed_publication_percentage / 100);
+
+        // Ingresos netos por venta para UN LOTE
         const single_cycle_net_sales_revenue = single_cycle_sales_revenue_gross - single_cycle_sales_deduction - single_cycle_current_publication_deduction;
-        const single_cycle_net_profit_loss = single_cycle_net_sales_revenue - single_cycle_crafting_cost;
 
-        results.per_unit.ingredient_cost = crafted_units > 0 ? total_ingredient_cost_with_purchase_tax_one_cycle / crafted_units : 0;
-        results.per_unit.rental_cost = crafted_units > 0 ? single_cycle_rental_cost / crafted_units : 0;
-        results.per_unit.total_crafting_cost = crafted_units > 0 ? single_cycle_crafting_cost / crafted_units : 0;
-        results.per_unit.selling_price = product_selling_price;
-        results.per_unit.net_selling_price = crafted_units > 0 ? single_cycle_net_sales_revenue / crafted_units : 0;
-        results.per_unit.net_profit_loss = crafted_units > 0 ? single_cycle_net_profit_loss / crafted_units : 0;
-        results.per_unit.net_profit_loss_percentage = results.per_unit.total_crafting_cost > 0 ? (results.per_unit.net_profit_loss / results.per_unit.total_crafting_cost) * 100 : (results.per_unit.net_profit_loss >= 0 ? 0 : -Infinity);
-
+        // --- Aplicar multiplicador de Lotes de Fabricaci\u00f3n a los totales del resumen ---
         results.summary.total_ingredient_cost = total_ingredient_cost_with_purchase_tax_one_cycle * fabrication_cycles;
         results.summary.total_rental_cost = single_cycle_rental_cost * fabrication_cycles;
-        results.summary.total_crafting_cost = single_cycle_crafting_cost * fabrication_cycles;
-        
+        results.summary.total_crafting_cost = single_cycle_crafting_cost * fabrication_cycles; // Costo total de fabricaci\u00f3n para todos los lotes
+
         const summary_total_sales_revenue_gross = single_cycle_sales_revenue_gross * fabrication_cycles;
-        results.summary.total_sales_revenue_gross = summary_total_sales_revenue_gross; // Guardar bruto para referencia si es necesario
+        results.summary.total_sales_revenue_gross = summary_total_sales_revenue_gross;
 
         const summary_sales_deduction = summary_total_sales_revenue_gross * (sales_percentage / 100);
         const summary_current_publication_cost = single_cycle_current_publication_deduction * fabrication_cycles;
@@ -278,9 +281,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         results.summary.total_net_sales_revenue = summary_total_sales_revenue_gross - summary_sales_deduction - summary_current_publication_cost - total_sunk_publication_cost_to_deduct;
         const summary_net_profit_loss = results.summary.total_net_sales_revenue - results.summary.total_crafting_cost;
-        // results.summary.net_profit_loss = summary_net_profit_loss; // No se muestra directamente este total, sino el %
 
         results.summary.net_profit_loss_percentage = results.summary.total_crafting_cost > 0 ? (summary_net_profit_loss / results.summary.total_crafting_cost) * 100 : (summary_net_profit_loss >=0 ? 0 : -Infinity);
+
+        // --- Resultados por unidad ---
+        const total_items_produced_all_cycles = crafted_units * fabrication_cycles;
+
+        // Costo por unidad de ingrediente (basado en un ciclo, como en el PHP original)
+        results.per_unit.ingredient_cost = crafted_units > 0 ? total_ingredient_cost_with_purchase_tax_one_cycle / crafted_units : 0;
+        // Costo por unidad de alquiler (basado en un ciclo, como en el PHP original)
+        results.per_unit.rental_cost = crafted_units > 0 ? single_cycle_rental_cost / crafted_units : 0;
+
+        // **** AJUSTE PRINCIPAL: Costo por Unidad Final (total_crafting_cost) considera todos los lotes ****
+        results.per_unit.total_crafting_cost = total_items_produced_all_cycles > 0 ? results.summary.total_crafting_cost / total_items_produced_all_cycles : 0;
+
+        results.per_unit.selling_price = product_selling_price; // Precio de venta original por unidad
+        // Precio de venta neto por unidad (basado en un ciclo, como en el PHP original)
+        results.per_unit.net_selling_price = crafted_units > 0 ? single_cycle_net_sales_revenue / crafted_units : 0;
+
+        // Ganancia/P\u00e9rdida neta por unidad (usa el nuevo costo unitario promedio global)
+        results.per_unit.net_profit_loss = results.per_unit.net_selling_price - results.per_unit.total_crafting_cost;
+
+        // Porcentaje de ganancia/p\u00e9rdida por unidad (basado en el nuevo costo unitario promedio global)
+        results.per_unit.net_profit_loss_percentage = results.per_unit.total_crafting_cost > 0 ? (results.per_unit.net_profit_loss / results.per_unit.total_crafting_cost) * 100 : (results.per_unit.net_profit_loss >= 0 ? 0 : -Infinity);
 
         return { success: true, results: results, errors: [] };
     }
