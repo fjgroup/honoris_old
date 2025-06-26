@@ -237,8 +237,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ingredients.forEach(ingredient => {
             const ingredient_name = ingredient.name;
-            // Cantidad del ingrediente_X necesaria para producir TODAS las 'crafted_units' en UN ciclo/lote
-            const required_ingredient_X_for_one_cycle = ingredient.quantity * crafted_units;
+            // Asumimos que ingredient.quantity (del formulario "Cantidad por Producto")
+            // es la cantidad TOTAL del ingrediente para UN LOTE de 'crafted_units',
+            // para replicar la l\u00f3gica PHP donde (int)$ingredient['quantity'] se usa directamente.
+            const required_ingredient_X_for_one_cycle = ingredient.quantity;
             const ingredient_price_per_unit = ingredientPricesMap[ingredient_name] || 0;
 
             const effective_purchase_rate = (100 - return_percentage) / 100;
