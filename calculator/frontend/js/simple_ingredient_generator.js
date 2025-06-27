@@ -219,11 +219,12 @@ document.addEventListener('DOMContentLoaded', () => {
              const perUnit = results.per_unit;
 
              const profitLossColor = (value) => (value >= 0 ? 'text-green-600' : 'text-red-600');
-             const netProfitLossPercentageFormatted = formatNumber(summary.net_profit_loss_percentage, 1); // 1 decimal para el %
+             const netProfitLossPercentageTotalFormatted = formatNumber(summary.net_profit_loss_percentage, 1); // Para la línea de Ingresos Netos
+             const netProfitLossPercentageSummaryFormatted = formatNumber(summary.net_profit_loss_percentage, 2); // Para la línea de Ganancia/Pérdida dedicada
 
              let summaryHtml = `
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-gray-800">
-                      <p class="${profitLossColor(summary.net_profit_loss)}"><strong>Ingresos por Venta (Neto):</strong> ${formatNumber(summary.total_net_sales_revenue)} <span class="${profitLossColor(summary.net_profit_loss_percentage)}">(${netProfitLossPercentageFormatted}%)</span></p>
+                      <p class="${profitLossColor(summary.net_profit_loss)}"><strong>Ingresos por Venta (Neto):</strong> ${formatNumber(summary.total_net_sales_revenue)} <span class="${profitLossColor(summary.net_profit_loss_percentage)}">(${netProfitLossPercentageTotalFormatted}%)</span></p>
                       <p><strong>Costo Total de Ingredientes:</strong> ${formatNumber(summary.total_ingredient_cost)}</p>
 
                       <p><strong>Ingreso por Venta (Unidad):</strong> ${formatNumber(perUnit.net_selling_price)}</p>
@@ -234,6 +235,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                       <p class="md:col-span-1"><strong>Costo Publicación Actual (2.5%):</strong> ${formatNumber(summary.current_total_publication_cost)}</p>
                       <p class="md:col-span-1"><strong>Costos Publicaciones Anteriores Aplicados:</strong> ${formatNumber(summary.total_sunk_publication_cost_applied)}</p>
+
+                      <!-- Nueva línea para Ganancia/Pérdida Neta (Total) explícita -->
+                      <div class="md:col-span-2 mt-2 text-center border-t pt-2">
+                          <p class="font-semibold ${profitLossColor(summary.net_profit_loss)}">
+                              Ganancia/Pérdida Neta (Total): ${formatNumber(summary.net_profit_loss)}
+                              <span class="${profitLossColor(summary.net_profit_loss_percentage)}">(${netProfitLossPercentageSummaryFormatted}%)</span>
+                          </p>
+                      </div>
                   </div>
              `;
              // No mostramos la sección "Resultados por Unidad Fabricada" explícitamente como antes,
@@ -306,10 +315,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let total_ingredient_cost_before_purchase_tax = 0;
         ingredients.forEach(ingredient => {
             const ingredient_name = ingredient.name;
-            // CORRECCIÓN: ingredient.quantity es por UNA unidad de producto final.
-            // Multiplicar por crafted_units para obtener el total para el ciclo.
-            const quantity_per_one_crafted_unit = parseInt(ingredient.quantity, 10) || 0;
-            const required_quantity_for_all_crafted_units = quantity_per_one_crafted_unit * crafted_units;
+            // REVERSIÓN: ingredient.quantity YA ES la cantidad para el lote completo de crafted_units.
+            const required_quantity_for_all_crafted_units = parseInt(ingredient.quantity, 10) || 0;
             const ingredient_price_per_unit = ingredient_prices_map[ingredient_name] || 0;
 
             const effective_purchase_rate = (100 - return_percentage) / 100;
