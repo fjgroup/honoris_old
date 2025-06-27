@@ -207,44 +207,58 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function displayResults(results) {
          console.log("Displaying results:", results); // Para depuracion
-         if (!DOM.summaryResultsDiv || !DOM.tierResultsDiv) {
-              console.error("Elements 'summaryResultsDiv' or 'tierResultsDiv' not found in DOM object or page.");
+         if (!DOM.summaryResultsDiv) {
+              console.error("Element 'summaryResultsDiv' not found in DOM object or page.");
              return;
          }
 
          DOM.summaryResultsDiv.innerHTML = '<h2 class="text-xl font-bold mb-4">Resumen General</h2>';
-         DOM.tierResultsDiv.innerHTML = ''; // Limpiamos la seccion de tierResults ya que se fusiona
+         // DOM.tierResultsDiv.innerHTML = ''; // tierResultsDiv no se usa en esta función para crafting
 
-         if (results && results.summary) {
+         if (results && results.summary && results.per_unit) {
              const summary = results.summary;
-             const perUnit = results.per_unit || {}; // Tomar per_unit si existe
+             const perUnit = results.per_unit;
 
-             // Determinar color para Ingresos Totales por Venta (Neto)
-             const netSalesRevenueColor = (summary.total_net_sales_revenue ?? 0) >= 0 ? 'text-green-600' : 'text-red-600';
+             const profitLossColor = (value) => (value >= 0 ? 'text-green-600' : 'text-red-600');
 
              let summaryHtml = `
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-800">
-                      <p class="${netSalesRevenueColor}"><strong>Ingresos por Venta (Neto):</strong> ${formatNumber(summary.total_net_sales_revenue ?? 0)} <span class="${(summary.net_profit_loss_percentage ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}">(${formatNumber(summary.net_profit_loss_percentage ?? 0, 1)}%)</span></p>
-                      <p><strong>Costo Total de Ingredientes:</strong> ${formatNumber(summary.total_ingredient_cost ?? 0)}</p>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-gray-800">
+                      <p><strong>Ingresos Brutos Totales por Venta:</strong> ${formatNumber(summary.total_sales_revenue_gross)}</p>
+                      <p><strong>Ingresos Netos Totales por Venta:</strong> ${formatNumber(summary.total_net_sales_revenue)}</p>
 
-                      <p><strong>Ingreso por Venta (Unidad):</strong> ${formatNumber(perUnit.net_selling_price ?? 0)}</p>
-                      <p><strong>Costo Total de Alquiler:</strong> ${formatNumber(summary.total_rental_cost ?? 0)}</p>
+                      <p><strong>Costo Total de Ingredientes:</strong> ${formatNumber(summary.total_ingredient_cost)}</p>
+                      <p><strong>Costo Total de Alquiler:</strong> ${formatNumber(summary.total_rental_cost)}</p>
+                      <p><strong>Costo Total de Fabricacion:</strong> ${formatNumber(summary.total_crafting_cost)}</p>
 
-                      <p><strong>Costo por Unidad Final:</strong> ${formatNumber(perUnit.total_crafting_cost ?? 0)}</p>
-                      <p><strong>Costo Total de Fabricacion:</strong> ${formatNumber(summary.total_crafting_cost ?? 0)}</p>
-                      <p class="md:col-span-1"><strong>Costo Publicación Actual (2.5%):</strong> ${formatNumber(summary.current_total_publication_cost ?? 0)}</p>
-                      <p class="md:col-span-1"><strong>Costos Publicaciones Anteriores Aplicados:</strong> ${formatNumber(summary.total_sunk_publication_cost_applied ?? 0)}</p>
+                      <p class="md:col-span-1"><strong>Costo Publicación Actual (2.5%):</strong> ${formatNumber(summary.current_total_publication_cost)}</p>
+                      <p class="md:col-span-1"><strong>Costos Publicaciones Anteriores Aplicados:</strong> ${formatNumber(summary.total_sunk_publication_cost_applied)}</p>
+
+                      <p class="${profitLossColor(summary.net_profit_loss)}"><strong>Ganancia/Pérdida Neta (Total):</strong> ${formatNumber(summary.net_profit_loss)}</p>
+                      <p class="${profitLossColor(summary.net_profit_loss_percentage)}"><strong>Ganancia/Pérdida Neta (% Total):</strong> ${formatNumber(summary.net_profit_loss_percentage, 2)}%</p>
+                  </div>
+                  <h3 class="text-lg font-semibold mt-6 mb-3 border-t pt-4">Resultados por Unidad Fabricada</h3>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-gray-800">
+                      <p><strong>Precio Venta Bruto por Unidad:</strong> ${formatNumber(perUnit.selling_price)}</p>
+                      <p><strong>Precio Venta Neto por Unidad:</strong> ${formatNumber(perUnit.net_selling_price)}</p>
+
+                      <p><strong>Costo Ingredientes por Unidad:</strong> ${formatNumber(perUnit.ingredient_cost)}</p>
+                      <p><strong>Costo Alquiler por Unidad:</strong> ${formatNumber(perUnit.rental_cost)}</p>
+                      <p><strong>Costo Total Fabricación por Unidad:</strong> ${formatNumber(perUnit.total_crafting_cost)}</p>
+
+                      <p class="${profitLossColor(perUnit.net_profit_loss)}"><strong>Ganancia/Pérdida Neta por Unidad:</strong> ${formatNumber(perUnit.net_profit_loss)}</p>
+                      <p class="${profitLossColor(perUnit.net_profit_loss_percentage)}"><strong>Ganancia/Pérdida Neta (% por Unidad):</strong> ${formatNumber(perUnit.net_profit_loss_percentage, 2)}%</p>
                   </div>
              `;
-             DOM.summaryResultsDiv.innerHTML = '<h2 class="text-xl font-bold mb-4">Resumen General</h2>' + summaryHtml;
+             DOM.summaryResultsDiv.innerHTML += summaryHtml; // Añadir al h2 existente
+        } else {
+            DOM.summaryResultsDiv.innerHTML += '<p>No hay resultados para mostrar o los datos son incompletos. Por favor, completa el formulario y calcula.</p>';
          }
 
-         // Limpiar areas de errores si no hay resultados o si la operacion fue exitosa
-          if (results && results.success === true) {
-              displayErrors([]); // Limpiar errores si la operacion fue exitosa
+          if (results && results.summary && results.per_unit) {
+              displayErrors([]);
           }
-
     }
+
     /**
       * Formatea un numero.
       * @param {number} number - El numero a formatear.
@@ -267,6 +281,133 @@ document.addEventListener('DOMContentLoaded', () => {
      }
      
     // --- Manejadores de Eventos ---
+
+    /**
+     * Realiza los cálculos de fabricación replicando la lógica del backend PHP.
+     * @param {object} formData - Los datos validados del formulario.
+     * @returns {object} Un objeto con los resultados del cálculo.
+     */
+    function performCraftingCalculationsJS(formData) {
+        console.log("Performing JS calculations with formData:", formData);
+
+        const rental_cost_value = parseFloat(formData.rental_cost_value) || 0;
+        const purchase_percentage = parseFloat(formData.purchase_percentage) || 0;
+        const sales_percentage = parseFloat(formData.sales_percentage) || 0;
+        const return_percentage = parseFloat(formData.return_percentage) || 0;
+
+        const object_power = parseInt(formData.object_power, 10) || 0;
+        const crafted_units = parseInt(formData.crafted_units, 10) || 1;
+
+        const ingredients = formData.ingredients || [];
+        const ingredient_prices = formData.ingredient_prices || [];
+
+        const product_selling_price = parseFloat(formData.product_selling_price) || 0;
+        const fabrication_cycles = parseInt(formData.fabrication_cycles, 10) || 1;
+        const total_sunk_publication_cost_to_deduct = parseFloat(formData.total_sunk_publication_cost_to_deduct) || 0;
+
+        const fixed_publication_percentage = 2.5;
+
+        const ingredient_prices_map = {};
+        ingredient_prices.forEach(price_item => {
+            if (price_item.name && price_item.price !== undefined) {
+                ingredient_prices_map[price_item.name] = parseFloat(price_item.price) || 0;
+            }
+        });
+
+        let total_ingredient_cost_before_purchase_tax = 0;
+        ingredients.forEach(ingredient => {
+            const ingredient_name = ingredient.name;
+            // CORRECCIÓN: ingredient.quantity es por UNA unidad de producto final.
+            // Multiplicar por crafted_units para obtener el total para el ciclo.
+            const quantity_per_one_crafted_unit = parseInt(ingredient.quantity, 10) || 0;
+            const required_quantity_for_all_crafted_units = quantity_per_one_crafted_unit * crafted_units;
+            const ingredient_price_per_unit = ingredient_prices_map[ingredient_name] || 0;
+
+            const effective_purchase_rate = (100 - return_percentage) / 100;
+            const actual_quantity_to_buy_for_all_units = required_quantity_for_all_crafted_units * effective_purchase_rate;
+            const cost_of_this_ingredient_for_all_units = actual_quantity_to_buy_for_all_units * ingredient_price_per_unit;
+
+            total_ingredient_cost_before_purchase_tax += cost_of_this_ingredient_for_all_units;
+        });
+
+        const total_ingredient_cost_with_purchase_tax = total_ingredient_cost_before_purchase_tax * (1 + (purchase_percentage / 100));
+
+        const single_cycle_rental_cost = (rental_cost_value / 100) * (crafted_units * object_power) * 0.1125;
+
+        const single_cycle_crafting_cost = total_ingredient_cost_with_purchase_tax + single_cycle_rental_cost;
+
+        const single_cycle_sales_revenue = product_selling_price * crafted_units;
+
+        const per_unit_ingredient_cost = (crafted_units > 0) ? total_ingredient_cost_with_purchase_tax / crafted_units : 0;
+        const per_unit_rental_cost = (crafted_units > 0) ? single_cycle_rental_cost / crafted_units : 0;
+        const per_unit_total_crafting_cost = (crafted_units > 0) ? single_cycle_crafting_cost / crafted_units : 0;
+
+        const single_cycle_sales_deduction = single_cycle_sales_revenue * (sales_percentage / 100);
+        const single_cycle_publication_deduction = single_cycle_sales_revenue * (fixed_publication_percentage / 100);
+        const single_cycle_net_sales_revenue = single_cycle_sales_revenue - single_cycle_sales_deduction - single_cycle_publication_deduction;
+
+        const per_unit_net_selling_price = (crafted_units > 0) ? single_cycle_net_sales_revenue / crafted_units : 0;
+
+        const single_cycle_net_profit_loss = single_cycle_net_sales_revenue - single_cycle_crafting_cost;
+        const per_unit_net_profit_loss = (crafted_units > 0) ? single_cycle_net_profit_loss / crafted_units : 0;
+
+        const summary_total_ingredient_cost = total_ingredient_cost_with_purchase_tax * fabrication_cycles;
+        const summary_total_rental_cost = single_cycle_rental_cost * fabrication_cycles;
+        const summary_total_crafting_cost = single_cycle_crafting_cost * fabrication_cycles;
+        const summary_total_sales_revenue_gross = single_cycle_sales_revenue * fabrication_cycles;
+
+        const summary_sales_deduction = summary_total_sales_revenue_gross * (sales_percentage / 100);
+        const summary_current_publication_cost = single_cycle_publication_deduction * fabrication_cycles;
+
+        const summary_total_net_sales_revenue = summary_total_sales_revenue_gross - summary_sales_deduction - summary_current_publication_cost - total_sunk_publication_cost_to_deduct;
+        const summary_net_profit_loss = summary_total_net_sales_revenue - summary_total_crafting_cost;
+
+        let net_profit_loss_percentage = 0;
+        if (summary_total_crafting_cost > 0) {
+            net_profit_loss_percentage = (summary_net_profit_loss / summary_total_crafting_cost) * 100;
+        } else {
+            if (summary_net_profit_loss > 0) net_profit_loss_percentage = Infinity;
+            else if (summary_net_profit_loss < 0) net_profit_loss_percentage = -Infinity;
+            else net_profit_loss_percentage = 0;
+        }
+
+        let per_unit_net_profit_loss_percentage = 0;
+        if (per_unit_total_crafting_cost > 0) {
+            per_unit_net_profit_loss_percentage = (per_unit_net_profit_loss / per_unit_total_crafting_cost) * 100;
+        } else {
+            if (per_unit_net_profit_loss > 0) per_unit_net_profit_loss_percentage = Infinity;
+            else if (per_unit_net_profit_loss < 0) per_unit_net_profit_loss_percentage = -Infinity;
+            else per_unit_net_profit_loss_percentage = 0;
+        }
+
+        const results = {
+            summary: {
+                total_ingredient_cost: summary_total_ingredient_cost,
+                total_rental_cost: summary_total_rental_cost,
+                total_crafting_cost: summary_total_crafting_cost,
+                total_sales_revenue_gross: summary_total_sales_revenue_gross,
+                current_total_publication_cost: summary_current_publication_cost,
+                total_sunk_publication_cost_applied: total_sunk_publication_cost_to_deduct,
+                total_net_sales_revenue: summary_total_net_sales_revenue,
+                net_profit_loss: summary_net_profit_loss,
+                net_profit_loss_percentage: net_profit_loss_percentage
+            },
+            per_unit: {
+                ingredient_cost: per_unit_ingredient_cost,
+                rental_cost: per_unit_rental_cost,
+                total_crafting_cost: per_unit_total_crafting_cost,
+                selling_price: product_selling_price,
+                net_selling_price: per_unit_net_selling_price,
+                net_profit_loss: per_unit_net_profit_loss,
+                net_profit_loss_percentage: per_unit_net_profit_loss_percentage
+            }
+        };
+
+        console.log("JS Calculation results:", results);
+        return results;
+    }
+
+
     /**
      * Maneja el envio del formulario de calculo.
      * @param {Event} event - El objeto evento del submit.
@@ -290,43 +431,25 @@ document.addEventListener('DOMContentLoaded', () => {
              console.log("Datos del formulario a enviar para calcular:", formData); // Para depuracion
 
 
-             try {
-                 const response = await fetch('backend/calculate_crafting.php', {
-                     method: 'POST',
-                     headers: {
-                          'Content-Type': 'application/json'
-                     },
-                     body: JSON.stringify(formData),
-                 });
+            // Validacion en frontend antes de calcular (opcional pero recomendado)
+            // const validationErrors = validateCraftingInput(formData); // Asumiendo que tienes una funcion de validacion en JS
+            // if (validationErrors.length > 0) {
+            //    displayErrors(validationErrors);
+            //    return;
+            // }
 
-                  const contentType = response.headers.get("content-type");
-                  if (!contentType || !contentType.includes("application/json")) {
-                      const text = await response.text();
-                      console.error('Respuesta no es JSON:', text);
-                       displayErrors(['Error en la respuesta del servidor. Formato inesperado o error en backend.']);
-                      // Mostrar la respuesta de texto en la consola para depurar el error del backend
-                      console.error('Texto de respuesta del servidor:', text);
-                      return;
-                  }
+            // Llamada a la función de cálculo en JS
+            const results = performCraftingCalculationsJS(formData);
 
-                 const result = await response.json();
-                  console.log("Resultado del backend:", result);
-
-                 if (result.success) {
-                     displayResults(result.results);
-                     DOM.craftingCalculatorForm.dataset.lastResults = JSON.stringify(result.results); // Guardar resultados para el boton de guardar precios
-                     displayErrors([]); // Asegurarse de limpiar errores si fue exitoso
-
-                 } else {
-                    // Si success es false, esperamos un array de errores
-                     displayErrors(result.errors || [result.error || 'Ocurrio un error desconocido en el calculo.']);
-                     displayResults(null); // Limpiar resultados si hubo error
-                 }
-             } catch (error) {
-                 console.error('Error al realizar el calculo o procesar la respuesta:', error);
-                 displayErrors(['Ocurrio un error al comunicarse con el servidor o procesar la respuesta. Consulta la consola para mas detalles.']);
-                 displayResults(null); // Limpiar resultados si hubo error
-             }
+            if (results) {
+                displayResults(results); // Mostrar resultados calculados en JS
+                DOM.craftingCalculatorForm.dataset.lastResults = JSON.stringify(results); // Guardar para el botón de "Guardar Precios"
+                displayErrors([]); // Limpiar errores si el cálculo fue exitoso
+            } else {
+                // Esto no debería ocurrir si performCraftingCalculationsJS siempre devuelve un objeto
+                displayErrors(['Ocurrió un error desconocido durante el cálculo en JavaScript.']);
+                displayResults(null);
+            }
         } else {
              console.error("Error: Element 'craftingCalculatorForm' not found for submit listener.");
         }
