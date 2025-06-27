@@ -206,50 +206,39 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {object} results - Objeto con los resultados del backend.
      */
     function displayResults(results) {
-         console.log("Displaying results:", results); // Para depuracion
+         console.log("Displaying results (User Preferred Format):", results);
          if (!DOM.summaryResultsDiv) {
               console.error("Element 'summaryResultsDiv' not found in DOM object or page.");
              return;
          }
 
          DOM.summaryResultsDiv.innerHTML = '<h2 class="text-xl font-bold mb-4">Resumen General</h2>';
-         // DOM.tierResultsDiv.innerHTML = ''; // tierResultsDiv no se usa en esta función para crafting
 
          if (results && results.summary && results.per_unit) {
              const summary = results.summary;
              const perUnit = results.per_unit;
 
              const profitLossColor = (value) => (value >= 0 ? 'text-green-600' : 'text-red-600');
+             const netProfitLossPercentageFormatted = formatNumber(summary.net_profit_loss_percentage, 1); // 1 decimal para el %
 
              let summaryHtml = `
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-gray-800">
-                      <p><strong>Ingresos Brutos Totales por Venta:</strong> ${formatNumber(summary.total_sales_revenue_gross)}</p>
-                      <p><strong>Ingresos Netos Totales por Venta:</strong> ${formatNumber(summary.total_net_sales_revenue)}</p>
-
+                      <p class="${profitLossColor(summary.net_profit_loss)}"><strong>Ingresos por Venta (Neto):</strong> ${formatNumber(summary.total_net_sales_revenue)} <span class="${profitLossColor(summary.net_profit_loss_percentage)}">(${netProfitLossPercentageFormatted}%)</span></p>
                       <p><strong>Costo Total de Ingredientes:</strong> ${formatNumber(summary.total_ingredient_cost)}</p>
+
+                      <p><strong>Ingreso por Venta (Unidad):</strong> ${formatNumber(perUnit.net_selling_price)}</p>
                       <p><strong>Costo Total de Alquiler:</strong> ${formatNumber(summary.total_rental_cost)}</p>
+
+                      <p><strong>Costo por Unidad Final:</strong> ${formatNumber(perUnit.total_crafting_cost)}</p>
                       <p><strong>Costo Total de Fabricacion:</strong> ${formatNumber(summary.total_crafting_cost)}</p>
 
                       <p class="md:col-span-1"><strong>Costo Publicación Actual (2.5%):</strong> ${formatNumber(summary.current_total_publication_cost)}</p>
                       <p class="md:col-span-1"><strong>Costos Publicaciones Anteriores Aplicados:</strong> ${formatNumber(summary.total_sunk_publication_cost_applied)}</p>
-
-                      <p class="${profitLossColor(summary.net_profit_loss)}"><strong>Ganancia/Pérdida Neta (Total):</strong> ${formatNumber(summary.net_profit_loss)}</p>
-                      <p class="${profitLossColor(summary.net_profit_loss_percentage)}"><strong>Ganancia/Pérdida Neta (% Total):</strong> ${formatNumber(summary.net_profit_loss_percentage, 2)}%</p>
-                  </div>
-                  <h3 class="text-lg font-semibold mt-6 mb-3 border-t pt-4">Resultados por Unidad Fabricada</h3>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-gray-800">
-                      <p><strong>Precio Venta Bruto por Unidad:</strong> ${formatNumber(perUnit.selling_price)}</p>
-                      <p><strong>Precio Venta Neto por Unidad:</strong> ${formatNumber(perUnit.net_selling_price)}</p>
-
-                      <p><strong>Costo Ingredientes por Unidad:</strong> ${formatNumber(perUnit.ingredient_cost)}</p>
-                      <p><strong>Costo Alquiler por Unidad:</strong> ${formatNumber(perUnit.rental_cost)}</p>
-                      <p><strong>Costo Total Fabricación por Unidad:</strong> ${formatNumber(perUnit.total_crafting_cost)}</p>
-
-                      <p class="${profitLossColor(perUnit.net_profit_loss)}"><strong>Ganancia/Pérdida Neta por Unidad:</strong> ${formatNumber(perUnit.net_profit_loss)}</p>
-                      <p class="${profitLossColor(perUnit.net_profit_loss_percentage)}"><strong>Ganancia/Pérdida Neta (% por Unidad):</strong> ${formatNumber(perUnit.net_profit_loss_percentage, 2)}%</p>
                   </div>
              `;
-             DOM.summaryResultsDiv.innerHTML += summaryHtml; // Añadir al h2 existente
+             // No mostramos la sección "Resultados por Unidad Fabricada" explícitamente como antes,
+             // ya que los datos relevantes por unidad se integraron arriba.
+             DOM.summaryResultsDiv.innerHTML += summaryHtml;
         } else {
             DOM.summaryResultsDiv.innerHTML += '<p>No hay resultados para mostrar o los datos son incompletos. Por favor, completa el formulario y calcula.</p>';
          }
